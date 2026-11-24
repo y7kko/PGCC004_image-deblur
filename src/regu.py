@@ -33,7 +33,14 @@ def vec(x:np.ndarray):
     x = np.atleast_2d(x)
     return x.reshape(np.prod(x.shape),1,order='F').squeeze()
 
-def kronecker_split(P,mid_idx):
+
+def kronecker_split(P,mid_idx,force_positive=True):
+    a1,b1 = psf_split(P,force_positive=force_positive)
+    A = toep(a1,mid_idx[0])
+    B = toep(b1,mid_idx[0])
+    return A,B
+
+def psf_split(P,force_positive=True):
     rank = np.linalg.matrix_rank(P)
     if rank != 1:
         warnings.warn(f"rank(P) = {rank}, this function only works with rank = 1")
@@ -41,16 +48,22 @@ def kronecker_split(P,mid_idx):
     
     u,s,v = np.linalg.svd(P)
     v = v.T
-    
-    if np.sum(u) < 0:
-        u1 = -u
-    if np.sum(v) < 0:
-        v1 = -v
+    if force_positive:
+        if np.sum(u) < 0:
+            u = -u
+        if np.sum(v) < 0:
+            v = -v
 
-    a1 = np.sqrt(s[0])*u1[:,0]
-    b1 = np.sqrt(s[0])*v1[:,0]
+    ay = np.sqrt(s[0])*u[:,0]
+    ax = np.sqrt(s[0])*v[:,0]
+    return ay,ax
 
-    A = toep(a1,mid_idx[0])
-    B = toep(b1,mid_idx[0])
-    return A,B
+def nagy_solve(A,B,G,reg=0):
+    Ua,Sa,Va = np.linalg.svd(A,)
+    Va = Va.T
+    Ub,Sb,Vb = np.linalg.svd(B,)
+    Vb = Vb.T
 
+    Gh = ((Ub.T @ G) @ Ua)
+    Ss = np.outer(Sb,Sa)
+    return Vb @ (Gh*Ss/(Ss**2 + reg**2)) @ Va.T
